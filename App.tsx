@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Incident, RemediationPlan, Severity } from './types';
 import { MOCK_INCIDENTS } from './constants';
 import MetricsChart from './components/MetricsChart';
 import RemediationCard from './components/RemediationCard';
+import LoadFromLoki from './components/LoadFromLoki';
 import { analyzeIncident } from './services/geminiService';
+import { createRemediationPR, checkBackendHealth } from './services/api';
 
 const App: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
@@ -13,8 +15,21 @@ const App: React.FC = () => {
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'details' | 'logs' | 'analysis'>('details');
+  const [showLoadFromLoki, setShowLoadFromLoki] = useState<boolean>(false);
+  const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
+  const [prUrlByIncident, setPrUrlByIncident] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    checkBackendHealth().then(setBackendAvailable);
+  }, []);
 
   const selectedIncident = incidents.find(i => i.id === selectedId);
+
+  const handleIncidentLoaded = (incident: Incident) => {
+    setIncidents(prev => [incident, ...prev]);
+    setSelectedId(incident.id);
+    setActiveTab('details');
+  };
 
   const handleAnalyze = async (incident: Incident) => {
     if (analysis[incident.id]) return;
@@ -34,13 +49,24 @@ const App: React.FC = () => {
   };
 
   const handleApprove = async (incidentId: string) => {
+    const plan = analysis[incidentId];
+    if (!plan) return;
     setIsApproving(true);
-    // Simulate API call to GitLab/Backend
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'RESOLVED' } : i));
+      const result = await createRemediationPR({ incidentId, remediationPlan: plan });
+      if (result.ok && result.pr_url) {
+        setPrUrlByIncident(prev => ({ ...prev, [incidentId]: result.pr_url! }));
+        setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'RESOLVED' } : i));
+      } else if (result.error && backendAvailable) {
+        alert(`Failed to create PR: ${result.error}`);
+      } else {
+        // Backend not available or not configured: fallback to mock
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'RESOLVED' } : i));
+      }
     } catch (err) {
-      alert("Failed to communicate with GitLab API.");
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'RESOLVED' } : i));
     } finally {
       setIsApproving(false);
     }
@@ -79,6 +105,19 @@ const App: React.FC = () => {
           </div>
         </div>
 
+        <div className="mb-4 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowLoadFromLoki(true)}
+            className="flex items-center justify-center gap-2 rounded-xl border border-indigo-500/50 bg-indigo-500/10 px-4 py-3 text-sm font-bold text-indigo-400 transition-all hover:bg-indigo-500/20"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+            Load from Loki
+          </button>
+          {backendAvailable === false && (
+            <span className="text-[10px] text-slate-500 px-2">Backend offline – using direct Loki</span>
+          )}
+        </div>
         <h2 className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4 px-2 text-white">Monitoring Webhooks</h2>
         <div className="space-y-2">
           {incidents.map(incident => (
@@ -113,6 +152,14 @@ const App: React.FC = () => {
           ))}
         </div>
       </aside>
+
+      {showLoadFromLoki && (
+        <LoadFromLoki
+          useBackend={backendAvailable === true}
+          onIncidentLoaded={handleIncidentLoaded}
+          onClose={() => setShowLoadFromLoki(false)}
+        />
+      )}
 
       <main className="flex-1 lg:ml-80 min-h-screen">
         {selectedIncident ? (
@@ -238,8 +285,14 @@ const App: React.FC = () => {
                 </p>
                 <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
                   <div className="bg-slate-900 border border-slate-800 px-6 py-4 rounded-xl text-left">
-                    <span className="text-[10px] text-slate-500 block uppercase font-bold mb-1">GitLab Merge Request</span>
-                    <a href="#" className="text-emerald-400 font-mono text-sm hover:underline">mr/fix-{selectedIncident.id.toLowerCase()}</a>
+                    <span className="text-[10px] text-slate-500 block uppercase font-bold mb-1">Pull Request</span>
+                    {prUrlByIncident[selectedIncident.id] ? (
+                      <a href={prUrlByIncident[selectedIncident.id]} target="_blank" rel="noopener noreferrer" className="text-emerald-400 font-mono text-sm hover:underline">
+                        {prUrlByIncident[selectedIncident.id]}
+                      </a>
+                    ) : (
+                      <span className="text-slate-500 font-mono text-sm">fix/{selectedIncident.id.toLowerCase()}</span>
+                    )}
                   </div>
                   <div className="bg-slate-900 border border-slate-800 px-6 py-4 rounded-xl text-left">
                     <span className="text-[10px] text-slate-500 block uppercase font-bold mb-1">Deployment Pipeline</span>

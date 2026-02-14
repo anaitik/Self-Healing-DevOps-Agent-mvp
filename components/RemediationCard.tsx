@@ -45,6 +45,24 @@ const RemediationCard: React.FC<Props> = ({ plan, onApprove, onReject, isSubmitt
           <p className="text-slate-200 text-sm leading-relaxed">{plan.root_cause_summary}</p>
         </div>
 
+        {(plan.finding_type || (plan.cve_ids && plan.cve_ids.length > 0) || (plan.affected_components && plan.affected_components.length > 0)) && (
+          <div className="flex flex-wrap gap-3">
+            {plan.finding_type && (
+              <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-800 text-slate-300">
+                {plan.finding_type.replace(/_/g, ' ')}
+              </span>
+            )}
+            {plan.cve_ids && plan.cve_ids.length > 0 && (
+              <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-400">
+                {plan.cve_ids.join(', ')}
+              </span>
+            )}
+            {plan.affected_components && plan.affected_components.length > 0 && (
+              <span className="text-slate-500 text-xs">Affected: {plan.affected_components.join(', ')}</span>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-4">
             <div>

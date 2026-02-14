@@ -21,6 +21,7 @@ export const analyzeIncident = async (incident: Incident): Promise<RemediationPl
     ${incident.logs.map(l => `[${l.level}] ${l.message}`).join('\n')}
     Repository Language: ${incident.repositoryLanguage}
 
+    Identify: (1) runtime errors and suggest fixes, (2) security vulnerabilities (CVEs, secrets, auth) and suggest patches/upgrades, (3) config or connectivity issues.
     Return JSON in this format:
 
     {
@@ -32,7 +33,10 @@ export const analyzeIncident = async (incident: Incident): Promise<RemediationPl
       "recommended_fix_description": "",
       "suggested_code_patch": "",
       "suggested_branch_name": "",
-      "suggested_commit_message": ""
+      "suggested_commit_message": "",
+      "finding_type": "runtime_error | security_vulnerability | performance | config | connectivity | other",
+      "cve_ids": [],
+      "affected_components": []
     }
   `;
 
@@ -55,17 +59,21 @@ export const analyzeIncident = async (incident: Incident): Promise<RemediationPl
             recommended_fix_description: { type: Type.STRING },
             suggested_code_patch: { type: Type.STRING },
             suggested_branch_name: { type: Type.STRING },
-            suggested_commit_message: { type: Type.STRING }
+            suggested_commit_message: { type: Type.STRING },
+            finding_type: { type: Type.STRING, enum: ['runtime_error', 'security_vulnerability', 'performance', 'config', 'connectivity', 'other'] },
+            cve_ids: { type: Type.ARRAY, items: { type: Type.STRING } },
+            affected_components: { type: Type.ARRAY, items: { type: Type.STRING } },
+            target_file: { type: Type.STRING }
           },
           required: [
-            "root_cause_category", 
-            "root_cause_summary", 
-            "severity", 
-            "confidence", 
-            "auto_patch_safe", 
-            "recommended_fix_description", 
-            "suggested_code_patch", 
-            "suggested_branch_name", 
+            "root_cause_category",
+            "root_cause_summary",
+            "severity",
+            "confidence",
+            "auto_patch_safe",
+            "recommended_fix_description",
+            "suggested_code_patch",
+            "suggested_branch_name",
             "suggested_commit_message"
           ]
         }
