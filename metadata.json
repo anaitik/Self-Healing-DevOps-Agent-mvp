@@ -1,0 +1,5 @@
+{
+  "name": "HealFlow: Self-Healing DevOps Agent",
+  "description": "An autonomous production incident response platform that uses Gemini 3 Pro to analyze Grafana alerts, determine root causes, and propose safe, automated GitLab merge requests for rapid remediation.",
+  "requestFramePermissions": []
+}
